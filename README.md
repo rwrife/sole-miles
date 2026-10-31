@@ -121,7 +121,7 @@ tablets) must keep compiling. See `PLAN.md`.
   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (values never logged).
 - App icon: `AppStore/icon.png` (generated, see above) wires into the Windows `.ico` runner
   resource and Android/iOS launcher icons via `flutter_launcher_icons`.
-- Adaptive UI seam symbols: `AdaptiveScaffold`, `AdaptiveButton`, `AdaptiveDialog`.
+- Adaptive UI seam symbols: `AdaptiveScaffold`, `AdaptiveButton`, `AdaptiveDialog` (Cupertino on iOS, Material 3 on Android, Fluent on Windows — UX strategy A, see PLAN.md).
 
 ## License
 
