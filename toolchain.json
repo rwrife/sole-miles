@@ -5,7 +5,7 @@
   "channel": "stable",
   "flutter_version": "3.47.2",
   "dart_version": "3.13.2",
-  "status": "PLANNED - scaffold only; Flutter workspace not yet created",
+  "status": "Flutter workspace scaffolded; app flows pending issues #2-#7",
   "application_id": "com.infinityball.solemiles",
   "ios_bundle_identifier": "com.infinityball.solemiles",
   "windows_identity_name": "cominfinityball.solemiles",
