@@ -38,7 +38,9 @@ jobs:
           echo /opt/flutter-pinned/bin >> "$GITHUB_PATH"
       - name: Verify Flutter pin
         run: |
-          test "$(/opt/flutter-pinned/bin/flutter --version --machine | jq -r .frameworkVersion)" = 3.47.2
+          /opt/flutter-pinned/bin/flutter --version
+          /opt/flutter-pinned/bin/flutter --version --machine > flutter-version.json
+          test "$(jq -r .frameworkVersion flutter-version.json)" = 3.47.2
       - run: flutter pub get --enforce-lockfile
       - run: flutter test
       - name: Build Android debug APK
