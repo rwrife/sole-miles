@@ -1,0 +1,20 @@
+{
+  "schema": "tool-lab/toolchain/v1",
+  "project": "sole-miles",
+  "framework": "flutter",
+  "channel": "stable",
+  "flutter_version": "3.47.2",
+  "dart_version": "3.13.2",
+  "status": "PLANNED - scaffold only; Flutter workspace not yet created",
+  "application_id": "com.infinityball.solemiles",
+  "ios_bundle_identifier": "com.infinityball.solemiles",
+  "windows_identity_name": "cominfinityball.solemiles",
+  "asc_registration": "FAILED FORBIDDEN_ERROR.PLA_NOT_ACCEPTED (2026-10-31) - see README Manual setup required",
+  "platforms_enabled": ["windows", "android", "ios"],
+  "tablet_support": "enabled",
+  "ux_strategy": "A-platform-native-adaptive",
+  "primary_ci_release_target": "windows-latest",
+  "mobile_ci": "flutter build apk --debug in Linux Docker; iOS compile later on macOS",
+  "icon": "AppStore/icon.png generated via OpenAI Images gpt-image-2.5-flare (2026-10-31); platform icon-set wiring pending issue #7",
+  "network_policy": "none - app must perform no network requests"
+}

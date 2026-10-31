@@ -1,0 +1,7 @@
+Sole Miles — private gear mileage, without accounts.
+
+Plan to track mileage for running shoes, walking shoes, boots and other distance-worn gear. Log activities against the pair you used, see an honest odometer and a rotation view, set your own retire targets, and archive old gear without losing history. Back up your records to JSON or export CSV when you choose.
+
+Sole Miles is designed to work offline on iPhone, iPad, Android phones and tablets, and Windows. No account, ads, social feed, location tracking, or cloud sync is planned. Retire targets are personal maintenance reminders, not medical or injury advice.
+
+Status: planned features; app is under construction. No runtime features are available in this documentation-only scaffold.
