@@ -94,20 +94,22 @@ extend total shoe life have no simple tool to see per-pair wear and rotation bal
 
 ## Current status
 
-Scaffold: documentation, store listing copy, and the generated app icon
-(`AppStore/icon.png`) exist. No Flutter workspace, CI, or build output yet —
-that is issue #1 work. See `PLAN.md` for architecture and milestones.
+Flutter workspace and PR CI scaffolded for Windows, Android, and iOS. The app
+currently shows only a neutral title screen; mileage flows, adaptive OS UI,
+and icon wiring remain issues #2–#7. `AppStore/icon.png` exists but is not
+wired to platform icons yet. See `PLAN.md` for architecture and milestones.
 
 ## Development quickstart (target)
 
-Pinned toolchain in `toolchain.json` (Flutter stable, Dart stable).
+Pinned toolchain in `toolchain.json` (Flutter 3.47.2, Dart 3.13.2).
 
 ```sh
-flutter --version            # must match toolchain.json pins once skeleton exists
-flutter create --platforms=windows,android,ios .   # issue #1 creates the real skeleton
+flutter --version            # verify toolchain.json pin
+flutter pub get --enforce-lockfile
+flutter analyze
 flutter test
-flutter build windows --release
-flutter build apk --debug
+flutter build windows --release # Windows host
+flutter build apk --debug     # Android SDK host
 ```
 
 Windows is the primary CI/release target (`windows-latest`); Android/iOS (phones and
@@ -119,8 +121,8 @@ tablets) must keep compiling. See `PLAN.md`.
   `windows-latest` → `flutter build windows --release` → zipped portable build attached to
   a GitHub release. iOS TestFlight later uses the four repository secrets named
   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (values never logged).
-- App icon: `AppStore/icon.png` (generated, see above) wires into the Windows `.ico` runner
-  resource and Android/iOS launcher icons via `flutter_launcher_icons`.
+- App icon: `AppStore/icon.png` (generated, see above) will replace scaffold icons in
+  Windows, Android, and iOS under issue #7.
 - Adaptive UI seam symbols: `AdaptiveScaffold`, `AdaptiveButton`, `AdaptiveDialog` (Cupertino on iOS, Material 3 on Android, Fluent on Windows — UX strategy A, see PLAN.md).
 
 ## License
