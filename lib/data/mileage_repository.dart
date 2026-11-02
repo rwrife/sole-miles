@@ -40,7 +40,7 @@ class SqliteMileageRepository implements MileageRepository {
       db.execute('PRAGMA foreign_keys = ON');
       final version =
           db.select('PRAGMA user_version').single.columnAt(0) as int;
-      if (version > 2) {
+      if (version > 3) {
         throw StateError('Unsupported database version $version');
       }
       if (version == 0) {
@@ -65,6 +65,27 @@ class SqliteMileageRepository implements MileageRepository {
         _transaction(db, () {
           db.execute('ALTER TABLE gear ADD COLUMN photo_path TEXT');
           db.execute('PRAGMA user_version = 2');
+        });
+      }
+      if (version < 3) {
+        _transaction(db, () {
+          db.execute(
+            "ALTER TABLE gear ADD COLUMN name TEXT NOT NULL DEFAULT ''",
+          );
+          db.execute(
+            "ALTER TABLE gear ADD COLUMN brand TEXT NOT NULL DEFAULT ''",
+          );
+          db.execute(
+            "ALTER TABLE gear ADD COLUMN unit TEXT NOT NULL DEFAULT 'kilometers'",
+          );
+          db.execute('ALTER TABLE gear ADD COLUMN successor_id TEXT');
+          db.execute(
+            "ALTER TABLE activities ADD COLUMN note TEXT NOT NULL DEFAULT ''",
+          );
+          db.execute(
+            "ALTER TABLE activities ADD COLUMN category TEXT NOT NULL DEFAULT 'running'",
+          );
+          db.execute('PRAGMA user_version = 3');
         });
       }
       return SqliteMileageRepository._(db, directory);
@@ -97,6 +118,10 @@ class SqliteMileageRepository implements MileageRepository {
         category: row['category'] as String,
         retireMeters: row['retire_meters'] as int,
         archived: row['archived'] == 1,
+        name: row['name'] as String,
+        brand: row['brand'] as String,
+        unit: DistanceUnit.values.byName(row['unit'] as String),
+        successorId: row['successor_id'] as String?,
       ),
   ];
 
@@ -107,6 +132,8 @@ class SqliteMileageRepository implements MileageRepository {
         id: row['id'] as String,
         atUtc: DateTime.parse(row['at_utc'] as String),
         meters: row['meters'] as int?,
+        note: row['note'] as String,
+        category: row['category'] as String,
         gearIds: [
           for (final assignment in _db.select(
             'SELECT gear_id FROM activity_gear WHERE activity_id = ? ORDER BY gear_id',
@@ -120,13 +147,33 @@ class SqliteMileageRepository implements MileageRepository {
   @override
   void saveGear(GearItem item) {
     _checkId(item.id);
+    if (item.successorId != null) {
+      _checkId(item.successorId!);
+      if (!item.archived ||
+          !_db.select('SELECT 1 FROM gear WHERE id = ? AND archived = 0', [
+            item.successorId,
+          ]).isNotEmpty) {
+        throw const DomainError(DomainErrorCode.unknownGear);
+      }
+    }
     _transaction(_db, () {
       _db.execute(
-        '''INSERT INTO gear (id, category, retire_meters, archived)
-          VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+        '''INSERT INTO gear (id, category, retire_meters, archived, name, brand, unit, successor_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
           category = excluded.category, retire_meters = excluded.retire_meters,
-          archived = excluded.archived''',
-        [item.id, item.category, item.retireMeters, item.archived ? 1 : 0],
+          archived = excluded.archived, name = excluded.name,
+          brand = excluded.brand, unit = excluded.unit,
+          successor_id = excluded.successor_id''',
+        [
+          item.id,
+          item.category,
+          item.retireMeters,
+          item.archived ? 1 : 0,
+          item.name,
+          item.brand,
+          item.unit.name,
+          item.successorId,
+        ],
       );
       // Reject category edits that would invalidate existing assignments.
       for (final activity in activities) {
@@ -144,11 +191,27 @@ class SqliteMileageRepository implements MileageRepository {
       for (final activity in newActivities) {
         _checkId(activity.id);
         Mileage.validate(activity, byId);
+        final prior = _db.select('SELECT 1 FROM activities WHERE id = ?', [
+          activity.id,
+        ]);
+        for (final gearId in activity.gearIds) {
+          final item = byId[gearId]!;
+          if (item.archived && prior.isEmpty) {
+            throw const DomainError(DomainErrorCode.unknownGear);
+          }
+        }
         _db.execute(
-          '''INSERT INTO activities (id, at_utc, meters) VALUES (?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET at_utc = excluded.at_utc,
-          meters = excluded.meters''',
-          [activity.id, activity.atUtc.toIso8601String(), activity.meters],
+          '''INSERT INTO activities (id, at_utc, meters, note, category)
+          VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+          at_utc = excluded.at_utc, meters = excluded.meters,
+          note = excluded.note, category = excluded.category''',
+          [
+            activity.id,
+            activity.atUtc.toIso8601String(),
+            activity.meters,
+            activity.note,
+            activity.category,
+          ],
         );
         _db.execute('DELETE FROM activity_gear WHERE activity_id = ?', [
           activity.id,

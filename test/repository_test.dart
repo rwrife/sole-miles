@@ -24,7 +24,7 @@ void main() {
     }
   });
 
-  test('fresh database initializes schema metadata and user_version = 2', () {
+  test('fresh database initializes schema metadata and user_version = 3', () {
     final repo = SqliteMileageRepository.openAt(tempDir);
     expect(repo.gear, isEmpty);
     expect(repo.activities, isEmpty);
@@ -35,7 +35,7 @@ void main() {
     final db = sqlite3.open(
       '${tempDir.path}${Platform.pathSeparator}mileage.sqlite',
     );
-    expect(db.select('PRAGMA user_version').single.columnAt(0), 2);
+    expect(db.select('PRAGMA user_version').single.columnAt(0), 3);
     db.close();
   });
 
@@ -88,7 +88,7 @@ void main() {
     repo.close();
 
     final verifyDb = sqlite3.open(dbFile);
-    expect(verifyDb.select('PRAGMA user_version').single.columnAt(0), 2);
+    expect(verifyDb.select('PRAGMA user_version').single.columnAt(0), 3);
     verifyDb.close();
   });
 
