@@ -22,8 +22,15 @@ class GearItem {
     required this.category,
     required this.retireMeters,
     this.archived = false,
+    this.name = '',
+    this.brand = '',
+    this.unit = DistanceUnit.kilometers,
+    this.successorId,
   }) {
-    if (id.isEmpty || category.isEmpty || retireMeters <= 0) {
+    if (id.isEmpty ||
+        category.isEmpty ||
+        retireMeters <= 0 ||
+        successorId == id) {
       throw const DomainError(DomainErrorCode.invalidTarget);
     }
   }
@@ -32,6 +39,10 @@ class GearItem {
   final String category;
   final int retireMeters;
   final bool archived;
+  final String name;
+  final String brand;
+  final DistanceUnit unit;
+  final String? successorId;
 }
 
 class Activity {
@@ -40,6 +51,8 @@ class Activity {
     required this.atUtc,
     required List<String> gearIds,
     this.meters,
+    this.note = '',
+    this.category = 'running',
   }) : gearIds = List.unmodifiable(gearIds) {
     if (id.isEmpty || !atUtc.isUtc) {
       throw const DomainError(DomainErrorCode.invalidDate);
@@ -53,6 +66,8 @@ class Activity {
   final DateTime atUtc;
   final int? meters; // null means unknown; never contributes to an odometer.
   final List<String> gearIds;
+  final String note;
+  final String category;
 }
 
 class ActivityLedger {
