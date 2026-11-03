@@ -1,12 +1,13 @@
-import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/cupertino.dart' as cupertino;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 
 import 'data/mileage_repository.dart';
 import 'domain/mileage.dart';
@@ -19,13 +20,13 @@ Future<void> main() async {
 
 enum AppPlatform { ios, android, windows }
 
-AppPlatform get appPlatform => Platform.isIOS
-    ? AppPlatform.ios
-    : Platform.isWindows
-    ? AppPlatform.windows
-    : AppPlatform.android;
+AppPlatform get appPlatform => switch (defaultTargetPlatform) {
+  TargetPlatform.iOS => AppPlatform.ios,
+  TargetPlatform.windows => AppPlatform.windows,
+  _ => AppPlatform.android,
+};
 
-// ponytail: one platform chrome seam; issue #5 adds native rail, goldens and shortcuts.
+// ponytail: one chrome seam; macOS/Linux use their host convention until supported.
 class AdaptiveScaffold extends StatelessWidget {
   const AdaptiveScaffold({required this.title, required this.child, super.key});
   final String title;
@@ -39,13 +40,141 @@ class AdaptiveScaffold extends StatelessWidget {
     ),
     AppPlatform.windows => fluent.ScaffoldPage(
       header: fluent.PageHeader(title: Text(title)),
-      content: child,
+      content: SafeArea(child: child),
     ),
     AppPlatform.android => material.Scaffold(
       appBar: material.AppBar(title: Text(title)),
-      body: child,
+      body: SafeArea(child: child),
     ),
   };
+}
+
+// ponytail: two destinations only; add a router when screens gain deep links.
+class AdaptiveNavigation extends StatelessWidget {
+  const AdaptiveNavigation({
+    required this.selected,
+    required this.onChanged,
+    required this.ledger,
+    required this.rotation,
+    super.key,
+  });
+  final int selected;
+  final ValueChanged<int> onChanged;
+  final Widget ledger;
+  final Widget rotation;
+
+  @override
+  Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 600;
+    final body = selected == 0 ? ledger : rotation;
+    if (appPlatform == AppPlatform.windows) {
+      return fluent.NavigationView(
+        pane: fluent.NavigationPane(
+          selected: selected,
+          onChanged: onChanged,
+          displayMode: wide
+              ? fluent.PaneDisplayMode.expanded
+              : fluent.PaneDisplayMode.compact,
+          items: [
+            fluent.PaneItem(
+              icon: const fluent.Icon(fluent.FluentIcons.home),
+              title: const Text('Ledger'),
+              body: ledger,
+            ),
+            fluent.PaneItem(
+              icon: const fluent.Icon(fluent.FluentIcons.view),
+              title: const Text('Rotation'),
+              body: rotation,
+            ),
+          ],
+        ),
+      );
+    }
+    if (appPlatform == AppPlatform.ios) {
+      if (wide) {
+        return Row(
+          children: [
+            SizedBox(
+              width: 180,
+              child: Column(
+                children: [
+                  cupertino.CupertinoButton(
+                    onPressed: () => onChanged(0),
+                    child: const Text('Ledger'),
+                  ),
+                  cupertino.CupertinoButton(
+                    onPressed: () => onChanged(1),
+                    child: const Text('Rotation'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: body),
+          ],
+        );
+      }
+      return Column(
+        children: [
+          Expanded(child: body),
+          cupertino.CupertinoTabBar(
+            currentIndex: selected,
+            onTap: onChanged,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(cupertino.CupertinoIcons.list_bullet),
+                label: 'Ledger',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(cupertino.CupertinoIcons.chart_bar),
+                label: 'Rotation',
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+    if (wide) {
+      return Row(
+        children: [
+          material.NavigationRail(
+            selectedIndex: selected,
+            onDestinationSelected: onChanged,
+            labelType: material.NavigationRailLabelType.all,
+            destinations: const [
+              material.NavigationRailDestination(
+                icon: Icon(material.Icons.list),
+                label: Text('Ledger'),
+              ),
+              material.NavigationRailDestination(
+                icon: Icon(material.Icons.bar_chart),
+                label: Text('Rotation'),
+              ),
+            ],
+          ),
+          Expanded(child: body),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        Expanded(child: body),
+        material.NavigationBar(
+          selectedIndex: selected,
+          onDestinationSelected: onChanged,
+          destinations: const [
+            material.NavigationDestination(
+              icon: Icon(material.Icons.list),
+              label: 'Ledger',
+            ),
+            material.NavigationDestination(
+              icon: Icon(material.Icons.bar_chart),
+              label: 'Rotation',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 class AdaptiveButton extends StatelessWidget {
@@ -92,6 +221,86 @@ class AdaptiveDialog extends StatelessWidget {
       content: child,
     ),
   };
+}
+
+class AdaptiveDatePicker {
+  static Future<DateTime?> show(
+    BuildContext context, {
+    required DateTime initialDate,
+    required DateTime firstDate,
+    required DateTime lastDate,
+  }) async {
+    final state = appPlatform;
+    if (state == AppPlatform.ios) {
+      DateTime selected = initialDate;
+      final ok = await cupertino.showCupertinoModalPopup<bool>(
+        context: context,
+        builder: (ctx) => Container(
+          height: 260,
+          color: cupertino.CupertinoColors.systemBackground.resolveFrom(ctx),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  cupertino.CupertinoButton(
+                    child: const Text('Cancel'),
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                  ),
+                  cupertino.CupertinoButton(
+                    child: const Text('Done'),
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: cupertino.CupertinoDatePicker(
+                  mode: cupertino.CupertinoDatePickerMode.date,
+                  initialDateTime: initialDate,
+                  minimumDate: firstDate,
+                  maximumDate: lastDate,
+                  onDateTimeChanged: (val) => selected = val,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return (ok ?? false) ? selected : null;
+    }
+    if (state == AppPlatform.windows) {
+      DateTime selected = initialDate;
+      final ok = await fluent.showDialog<bool>(
+        context: context,
+        builder: (ctx) => fluent.ContentDialog(
+          title: const Text('Select date'),
+          content: fluent.DatePicker(
+            selected: selected,
+            startDate: firstDate,
+            endDate: lastDate,
+            onChanged: (val) => selected = val,
+          ),
+          actions: [
+            fluent.Button(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(ctx).pop(false),
+            ),
+            fluent.FilledButton(
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+            ),
+          ],
+        ),
+      );
+      return (ok ?? false) ? selected : null;
+    }
+    return material.showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+  }
 }
 
 class AdaptiveInput extends StatelessWidget {
@@ -210,6 +419,15 @@ class _LedgerScreenState extends State<LedgerScreen> {
   Activity? pendingDelete;
   GearItem? pendingArchive;
   bool showArchived = false;
+  int selectedPage = 0;
+  final ledgerFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    ledgerFocus.requestFocus();
+  }
+
   final name = TextEditingController();
   final brand = TextEditingController();
   final category = TextEditingController(text: 'running');
@@ -225,6 +443,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
 
   @override
   void dispose() {
+    ledgerFocus.dispose();
     for (final c in [name, brand, category, target, distance, date, note]) {
       c.dispose();
     }
@@ -458,6 +677,24 @@ class _LedgerScreenState extends State<LedgerScreen> {
           controller: date,
           error: formError,
         ),
+        AdaptiveButton(
+          label: 'Pick date',
+          onPressed: () async {
+            final now = DateTime.now();
+            final parsed = DateTime.tryParse(date.text);
+            final picked = await AdaptiveDatePicker.show(
+              context,
+              initialDate: parsed ?? now,
+              firstDate: DateTime(1900),
+              lastDate: DateTime(now.year + 10),
+            );
+            if (picked != null && mounted) {
+              setState(
+                () => date.text = picked.toIso8601String().substring(0, 10),
+              );
+            }
+          },
+        ),
         for (final item in active)
           AdaptiveButton(
             label:
@@ -504,8 +741,45 @@ class _LedgerScreenState extends State<LedgerScreen> {
       final right = Mileage.odometer(b.id, activities) * a.retireMeters;
       return right.compareTo(left);
     });
-    return AdaptiveScaffold(
-      title: 'Sole Miles',
+
+    final rotationView = ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          '4-Week Rotation Balance',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        const SizedBox(height: 12),
+        for (final item in items.where((g) => !g.archived)) ...[
+          Builder(
+            builder: (ctx) {
+              final nowUtc = DateTime.now().toUtc();
+              final map = Mileage.rotation(items, activities, nowUtc);
+              final meters = map[item.id] ?? 0;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text('${item.name}: ${meters / 1000} km last 4 weeks'),
+              );
+            },
+          ),
+        ],
+        if (items.where((g) => !g.archived).isEmpty)
+          const Text('No active gear in rotation.'),
+      ],
+    );
+
+    final ledgerView = Focus(
+      focusNode: ledgerFocus,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.keyN &&
+            (HardwareKeyboard.instance.isControlPressed ||
+                HardwareKeyboard.instance.isMetaPressed)) {
+          startActivity();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -537,11 +811,38 @@ class _LedgerScreenState extends State<LedgerScreen> {
               for (final item in items.where(
                 (g) => !g.archived || showArchived,
               )) ...[
-                Text(
-                  '${item.name.isEmpty ? item.category : item.name} — '
-                  '${Mileage.odometer(item.id, activities) / 1000} / '
-                  '${item.retireMeters / 1000} km'
-                  '${item.archived ? ' (retired)' : ''}',
+                Builder(
+                  builder: (ctx) {
+                    final odo = Mileage.odometer(item.id, activities);
+                    final state = Mileage.wear(odo, item.retireMeters);
+                    final (statusText, statusColor) = switch (state) {
+                      WearState.healthy => ('Healthy', const Color(0xFF1B5E20)),
+                      WearState.nudge => ('Nudge', const Color(0xFFE65100)),
+                      WearState.retire => ('Retire', const Color(0xFFB71C1C)),
+                    };
+                    return Semantics(
+                      label:
+                          '${item.name} odometer ${odo / 1000} of ${item.retireMeters / 1000} kilometers, wear status $statusText',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${item.name.isEmpty ? item.category : item.name} — '
+                            '${odo / 1000} / '
+                            '${item.retireMeters / 1000} km'
+                            '${item.archived ? ' (retired)' : ''}',
+                          ),
+                          Text(
+                            'Status: $statusText',
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 Text(
                   'Last used: ${activities.where((a) => a.gearIds.contains(item.id)).isEmpty ? 'Never' : (activities.where((a) => a.gearIds.contains(item.id)).map((a) => a.atUtc).toList()..sort()).last.toIso8601String().substring(0, 10)}',
@@ -591,6 +892,16 @@ class _LedgerScreenState extends State<LedgerScreen> {
             ],
           ],
         ],
+      ),
+    );
+
+    return AdaptiveScaffold(
+      title: 'Sole Miles',
+      child: AdaptiveNavigation(
+        selected: selectedPage,
+        onChanged: (idx) => setState(() => selectedPage = idx),
+        ledger: ledgerView,
+        rotation: rotationView,
       ),
     );
   }
