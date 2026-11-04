@@ -4,4 +4,4 @@ Plan to track mileage for running shoes, walking shoes, boots and other distance
 
 Sole Miles is designed to work offline on iPhone, iPad, Android phones and tablets, and Windows. No account, ads, social feed, location tracking, or cloud sync is planned. Retire targets are personal maintenance reminders, not medical or injury advice.
 
-Status: planned features; app is under construction. No runtime features are available in this documentation-only scaffold.
+Status: offline ledger with SQLite storage, rotation balance, native adaptive widgets, and JSON backup/restore + CSV export implemented; packaging, icons and store release pending issue #7.

@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'backup.dart';
+
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -278,6 +280,117 @@ class SqliteMileageRepository implements MileageRepository {
               )
               .single['value']
           as String;
+
+  MileageBackup backup({bool includePhotos = false}) {
+    final photos = <String, Uint8List>{};
+    if (includePhotos) {
+      for (final item in gear) {
+        final path = photoPath(item.id);
+        if (path != null) photos[item.id] = File(path).readAsBytesSync();
+      }
+    }
+    return MileageBackup(gear, activities, photos);
+  }
+
+  /// Validate before touching storage. Conflicting IDs in a merge never overwrite.
+  /// A private full snapshot precedes both operations, including omitted photos.
+  File restore(MileageBackup incoming, {required bool replace}) {
+    // Re-validate even when caller constructs a backup instead of parsing JSON.
+    final parsed = MileageBackup.parse(incoming.encode());
+    final oldGear = gear;
+    final oldActivities = activities;
+    if (!replace &&
+        (parsed.gear.any((g) => oldGear.any((old) => old.id == g.id)) ||
+            parsed.activities.any(
+              (a) => oldActivities.any((old) => old.id == a.id),
+            ))) {
+      throw const FormatException('Merge ID conflict; existing data unchanged');
+    }
+    final snapshot = File(
+      '${_directory.path}${Platform.pathSeparator}pre-restore-${DateTime.now().microsecondsSinceEpoch}.json',
+    );
+    final snapshotBytes = backup(includePhotos: true).encode();
+    snapshot.writeAsStringSync(snapshotBytes, flush: true);
+    if (snapshot.readAsStringSync() != snapshotBytes) {
+      throw const FileSystemException('Safety snapshot verification failed');
+    }
+    final created = <File>[];
+    final priorPhotos = replace
+        ? [
+            for (final g in oldGear)
+              if (photoPath(g.id) case final String p) p,
+          ]
+        : <String>[];
+    try {
+      final paths = <String, String>{};
+      for (final entry in parsed.photos.entries) {
+        final directory = Directory(
+          '${_directory.path}${Platform.pathSeparator}photos',
+        )..createSync(recursive: true);
+        final file = File(
+          '${directory.path}${Platform.pathSeparator}${entry.key}-${DateTime.now().microsecondsSinceEpoch}.bin',
+        );
+        file.writeAsBytesSync(entry.value, flush: true);
+        created.add(file);
+        paths[entry.key] = file.path;
+      }
+      _transaction(_db, () {
+        if (replace) {
+          _db.execute('DELETE FROM activity_gear');
+          _db.execute('DELETE FROM activities');
+          _db.execute('DELETE FROM gear');
+        }
+        for (final g in parsed.gear) {
+          _db.execute(
+            '''INSERT INTO gear
+            (id, category, retire_meters, archived, name, brand, unit, successor_id, photo_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            [
+              g.id,
+              g.category,
+              g.retireMeters,
+              g.archived ? 1 : 0,
+              g.name,
+              g.brand,
+              g.unit.name,
+              g.successorId,
+              paths[g.id],
+            ],
+          );
+        }
+        for (final a in parsed.activities) {
+          _db.execute(
+            '''INSERT INTO activities (id, at_utc, meters, note, category)
+            VALUES (?, ?, ?, ?, ?)''',
+            [a.id, a.atUtc.toIso8601String(), a.meters, a.note, a.category],
+          );
+          for (final id in a.gearIds) {
+            _db.execute('INSERT INTO activity_gear VALUES (?, ?)', [a.id, id]);
+          }
+        }
+      });
+      for (final path in priorPhotos) {
+        final file = File(path);
+        // Only unlink files owned by this repository, not arbitrary legacy paths.
+        if (file.path.startsWith(
+              '${_directory.path}${Platform.pathSeparator}photos${Platform.pathSeparator}',
+            ) &&
+            file.existsSync()) {
+          try {
+            file.deleteSync();
+          } on FileSystemException {
+            /* orphan is safe */
+          }
+        }
+      }
+      return snapshot;
+    } catch (_) {
+      for (final file in created) {
+        if (file.existsSync()) file.deleteSync();
+      }
+      rethrow;
+    }
+  }
 
   @override
   void close() => _db.close();
