@@ -1,6 +1,11 @@
 import 'dart:math';
+import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:file_selector/file_selector.dart';
+
+import 'data/backup.dart';
+
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/foundation.dart'
@@ -376,13 +381,36 @@ String newId() {
 }
 
 class SoleMilesApp extends StatelessWidget {
-  const SoleMilesApp({this.repository, this.pickPhoto = openFile, super.key});
+  const SoleMilesApp({
+    this.repository,
+    this.pickPhoto = openFile,
+    this.saveFilePicker = FilePicker.saveFile,
+    this.pickFilePicker = FilePicker.pickFile,
+    super.key,
+  });
   final MileageRepository? repository;
   final Future<XFile?> Function({List<XTypeGroup> acceptedTypeGroups})
   pickPhoto;
+  final Future<Uri?> Function({
+    required String fileName,
+    required Uint8List bytes,
+    String mimeType,
+  })
+  saveFilePicker;
+  final Future<PlatformFile?> Function({
+    FileType type,
+    List<String>? allowedExtensions,
+  })
+  pickFilePicker;
+
   @override
   Widget build(BuildContext context) {
-    final home = LedgerScreen(repository: repository, pickPhoto: pickPhoto);
+    final home = LedgerScreen(
+      repository: repository,
+      pickPhoto: pickPhoto,
+      saveFilePicker: saveFilePicker,
+      pickFilePicker: pickFilePicker,
+    );
     return switch (appPlatform) {
       AppPlatform.ios => cupertino.CupertinoApp(
         title: 'Sole Miles',
@@ -402,11 +430,24 @@ class LedgerScreen extends StatefulWidget {
   const LedgerScreen({
     required this.repository,
     this.pickPhoto = openFile,
+    this.saveFilePicker = FilePicker.saveFile,
+    this.pickFilePicker = FilePicker.pickFile,
     super.key,
   });
   final MileageRepository? repository;
   final Future<XFile?> Function({List<XTypeGroup> acceptedTypeGroups})
   pickPhoto;
+  final Future<Uri?> Function({
+    required String fileName,
+    required Uint8List bytes,
+    String mimeType,
+  })
+  saveFilePicker;
+  final Future<PlatformFile?> Function({
+    FileType type,
+    List<String>? allowedExtensions,
+  })
+  pickFilePicker;
   @override
   State<LedgerScreen> createState() => _LedgerScreenState();
 }
@@ -419,6 +460,8 @@ class _LedgerScreenState extends State<LedgerScreen> {
   Activity? pendingDelete;
   GearItem? pendingArchive;
   bool showArchived = false;
+  bool includeBackupPhotos = false;
+  DistanceUnit exportUnit = DistanceUnit.kilometers;
   int selectedPage = 0;
   final ledgerFocus = FocusNode();
 
@@ -589,6 +632,124 @@ class _LedgerScreenState extends State<LedgerScreen> {
       });
     } catch (e) {
       setState(() => notice = 'Undo failed: $e');
+    }
+  }
+
+  Future<void> saveDocument(String name, String contents, String mime) async {
+    try {
+      final location = await widget.saveFilePicker(
+        fileName: name,
+        bytes: Uint8List.fromList(utf8.encode(contents)),
+        mimeType: mime,
+      );
+      if (mounted && location != null) {
+        setState(() => notice = 'Saved $name');
+      }
+    } catch (e) {
+      if (mounted) setState(() => notice = 'Export failed: $e');
+    }
+  }
+
+  Future<int?> chooseRestore(MileageBackup backup) {
+    final summary = Text(
+      'Backup v${MileageBackup.version}: ${backup.gear.length} gear items, '
+      '${backup.activities.length} activities, ${backup.photos.length} photos. '
+      'Replace saves a private safety snapshot first. Merge rejects ID conflicts.',
+    );
+    return switch (appPlatform) {
+      AppPlatform.ios => cupertino.showCupertinoDialog<int>(
+        context: context,
+        builder: (ctx) => cupertino.CupertinoAlertDialog(
+          title: const Text('Restore preview'),
+          content: summary,
+          actions: [
+            cupertino.CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            cupertino.CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx, 1),
+              child: const Text('Merge'),
+            ),
+            cupertino.CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.pop(ctx, 2),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      ),
+      AppPlatform.windows => fluent.showDialog<int>(
+        context: context,
+        builder: (ctx) => fluent.ContentDialog(
+          title: const Text('Restore preview'),
+          content: summary,
+          actions: [
+            fluent.Button(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            fluent.Button(
+              onPressed: () => Navigator.pop(ctx, 1),
+              child: const Text('Merge'),
+            ),
+            fluent.FilledButton(
+              onPressed: () => Navigator.pop(ctx, 2),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      ),
+      AppPlatform.android => material.showDialog<int>(
+        context: context,
+        builder: (ctx) => material.AlertDialog(
+          title: const Text('Restore preview'),
+          content: summary,
+          actions: [
+            material.TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            material.TextButton(
+              onPressed: () => Navigator.pop(ctx, 1),
+              child: const Text('Merge'),
+            ),
+            material.FilledButton(
+              onPressed: () => Navigator.pop(ctx, 2),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      ),
+    };
+  }
+
+  Future<void> importBackup() async {
+    try {
+      final file = await widget.pickFilePicker(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (file == null || !mounted) return;
+      final length = await file.length();
+      if (length == null || length > 50 * 1024 * 1024) {
+        throw const FormatException('Backup size unknown or too large');
+      }
+      final backup = MileageBackup.parse(utf8.decode(await file.readAsBytes()));
+      if (!mounted) return;
+      final choice = await chooseRestore(backup);
+      if (choice == null || !mounted) return;
+      final snapshot = (repo! as SqliteMileageRepository).restore(
+        backup,
+        replace: choice == 2,
+      );
+      setState(() {
+        pendingDelete = null;
+        pendingArchive = null;
+        notice = 'Restored. Safety snapshot: ${snapshot.path}';
+      });
+    } catch (e) {
+      if (mounted) setState(() => notice = 'Restore rejected: $e');
     }
   }
 
@@ -799,11 +960,23 @@ class _LedgerScreenState extends State<LedgerScreen> {
             else if (editingActivity != null)
               activityForm()
             else ...[
-              AdaptiveButton(
-                label: 'Log activity',
-                onPressed: () => startActivity(),
+              Row(
+                children: [
+                  Expanded(
+                    child: AdaptiveButton(
+                      label: 'Log activity',
+                      onPressed: () => startActivity(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: AdaptiveButton(
+                      label: 'Add gear',
+                      onPressed: () => startGear(),
+                    ),
+                  ),
+                ],
               ),
-              AdaptiveButton(label: 'Add gear', onPressed: () => startGear()),
               AdaptiveButton(
                 label: showArchived ? 'Hide retired' : 'Show retired',
                 onPressed: () => setState(() => showArchived = !showArchived),
@@ -889,6 +1062,52 @@ class _LedgerScreenState extends State<LedgerScreen> {
                   onPressed: () => delete(activity),
                 ),
               ],
+              const SizedBox(height: 16),
+              const Text('Data portability'),
+              AdaptiveButton(
+                label: includeBackupPhotos ? 'Photos: yes' : 'Photos: no',
+                onPressed: () =>
+                    setState(() => includeBackupPhotos = !includeBackupPhotos),
+              ),
+              AdaptiveButton(
+                label: 'Units: ${exportUnit.name}',
+                onPressed: () => setState(
+                  () => exportUnit = exportUnit == DistanceUnit.miles
+                      ? DistanceUnit.kilometers
+                      : DistanceUnit.miles,
+                ),
+              ),
+              AdaptiveButton(
+                label: 'Backup JSON',
+                onPressed: () => saveDocument(
+                  'sole-miles-backup.json',
+                  (repo! as SqliteMileageRepository)
+                      .backup(includePhotos: includeBackupPhotos)
+                      .encode(),
+                  'application/json',
+                ),
+              ),
+              AdaptiveButton(label: 'Restore JSON', onPressed: importBackup),
+              AdaptiveButton(
+                label: 'Activities CSV',
+                onPressed: () => saveDocument(
+                  'sole-miles-activities.csv',
+                  MileageBackup.csvActivities(repo!.activities, exportUnit),
+                  'text/csv',
+                ),
+              ),
+              AdaptiveButton(
+                label: 'Gear totals CSV',
+                onPressed: () => saveDocument(
+                  'sole-miles-gear-totals.csv',
+                  MileageBackup.csvTotals(
+                    repo!.gear,
+                    repo!.activities,
+                    exportUnit,
+                  ),
+                  'text/csv',
+                ),
+              ),
             ],
           ],
         ],

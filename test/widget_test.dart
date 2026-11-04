@@ -104,7 +104,12 @@ void main() {
         find.textContaining('Pegasus 40 — 10.5 / 500.0 km'),
         findsOneWidget,
       );
+      await tester.scrollUntilVisible(find.text('Last used: 2026-11-02'), 50.0);
       expect(find.text('Last used: 2026-11-02'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.textContaining('2026-11: 10.5 km'),
+        50.0,
+      );
       expect(find.textContaining('2026-11: 10.5 km'), findsOneWidget);
       expect(repo.activities.length, 1);
       expect(repo.activities.first.meters, 10500);
@@ -137,9 +142,16 @@ void main() {
     expect(find.textContaining('Vaporfly — 21.1 / 250.0 km'), findsOneWidget);
 
     // Delete
+    await tester.scrollUntilVisible(
+      find.text('Delete activity ${act.id}'),
+      150.0,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete activity ${act.id}'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(find.text('Activity deleted'), -150.0);
+    await tester.pumpAndSettle();
     expect(find.text('Activity deleted'), findsOneWidget);
     expect(find.textContaining('Vaporfly — 0.0 / 250.0 km'), findsOneWidget);
     expect(repo.activities, isEmpty);
@@ -177,10 +189,20 @@ void main() {
 
       expect(find.text('Old Speedgoat — 0.0 / 700.0 km'), findsOneWidget);
 
+      await tester.scrollUntilVisible(
+        find.text('Replace Old Speedgoat with Speedgoat 5'),
+        150.0,
+      );
+      await tester.pumpAndSettle();
       // Retire old pair and link new pair as successor
       await tester.tap(find.text('Replace Old Speedgoat with Speedgoat 5'));
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.text('Old Speedgoat retired'),
+        -150.0,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Old Speedgoat retired'), findsOneWidget);
       // Old pair is retired, header line hidden by default
       expect(find.text('Old Speedgoat — 0.0 / 700.0 km'), findsNothing);
