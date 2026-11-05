@@ -1,0 +1,10 @@
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: AppStore/icon.png
+  adaptive_icon_background: AppStore/icon.png
+  adaptive_icon_foreground: AppStore/icon.png
+  windows:
+    generate: true
+    image_path: AppStore/icon.png
+    icon_size: 256

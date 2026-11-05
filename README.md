@@ -94,10 +94,11 @@ extend total shoe life have no simple tool to see per-pair wear and rotation bal
 
 ## Current status
 
-Flutter workspace and PR CI scaffolded for Windows, Android, and iOS. The app
-currently shows only a neutral title screen; mileage flows, adaptive OS UI,
-and icon wiring remain issues #2–#7. `AppStore/icon.png` exists but is not
-wired to platform icons yet. See `PLAN.md` for architecture and milestones.
+Offline ledger, wear dashboard, rotation, adaptive UI and JSON/CSV portability are
+implemented. Windows, Android and iOS builds are checked in CI. `AppStore/icon.png`
+is wired to all three platform launchers. Windows portable release publishes from
+version tags only after CI validation; mobile store submission remains a later
+milestone. See `PLAN.md` for architecture and milestones.
 
 ## Development quickstart (target)
 
@@ -117,12 +118,15 @@ tablets) must keep compiling. See `PLAN.md`.
 
 ## CI and packaging
 
-- Release Action `.github/workflows/release.yml` (issue #7): `v*` tag or manual dispatch →
-  `windows-latest` → `flutter build windows --release` → zipped portable build attached to
-  a GitHub release. iOS TestFlight later uses the four repository secrets named
-  `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (values never logged).
-- App icon: `AppStore/icon.png` (generated, see above) will replace scaffold icons in
-  Windows, Android, and iOS under issue #7.
+- `.github/workflows/release.yml` accepts existing `vMAJOR.MINOR.PATCH+BUILD` tags (or
+  manual dispatch with that tag). Tags must point into `main` history. Pinned Flutter
+  on `windows-latest` builds a portable Windows zip and attaches it to the matching
+  GitHub release. Tag name supplies build name/number; `CHANGELOG.md` supplies release
+  notes. No release has been published by this PR alone. iOS TestFlight later uses
+  repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID`.
+- `dart run flutter_launcher_icons` derives Windows `.ico`, Android standard/adaptive
+  launchers and iOS AppIcon from existing `AppStore/icon.png` (RGB 1024×1024). Generated
+  resources are checked in; Android/iOS builds remain CI-gated.
 - Adaptive UI seam symbols: `AdaptiveScaffold`, `AdaptiveButton`, `AdaptiveDialog` (Cupertino on iOS, Material 3 on Android, Fluent on Windows — UX strategy A, see PLAN.md).
 
 ## License

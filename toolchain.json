@@ -5,7 +5,7 @@
   "channel": "stable",
   "flutter_version": "3.47.2",
   "dart_version": "3.13.2",
-  "status": "Flutter workspace scaffolded; app flows pending issues #2-#7",
+  "status": "Offline ledger, rotation view, adaptive UI and backup/restore implemented; Windows release workflow and launcher icons wired",
   "application_id": "com.infinityball.solemiles",
   "ios_bundle_identifier": "com.infinityball.solemiles",
   "windows_identity_name": "cominfinityball.solemiles",
@@ -15,6 +15,6 @@
   "ux_strategy": "A-platform-native-adaptive",
   "primary_ci_release_target": "windows-latest",
   "mobile_ci": "flutter build apk --debug in Linux Docker; iOS compile later on macOS",
-  "icon": "AppStore/icon.png generated via OpenAI Images gpt-image-2.5-flare (2026-10-31); platform icon-set wiring pending issue #7",
+  "icon": "AppStore/icon.png generated via OpenAI Images gpt-image-2.5-flare (2026-10-31); Windows/Android/iOS launcher icons wired via flutter_launcher_icons",
   "network_policy": "none - app must perform no network requests"
 }
